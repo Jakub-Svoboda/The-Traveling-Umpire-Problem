@@ -15,6 +15,7 @@ import csv
 import re
 import random
 import itertools
+import statistics
 
 class Problem:
 	def __init__(self, nTeams, dists, opponents, args):
@@ -45,10 +46,7 @@ class Problem:
 					#print(gamePair, "not in ", self.tournament)
 					self.tournament[slotIdx].append(gamePair)
 				#self.tournament[slotIdx][recordIdx] = [recordIdx+1, self.opponents[slotIdx][recordIdx]]
-
 		#print(self.tournament)
-
-
 
 class Solution:
 
@@ -58,11 +56,16 @@ class Solution:
 
 	def cost(self):
 		distanceCost = self.getDistanceCost()	
-		print(distanceCost)
+		#print("Distance cost", distanceCost)
 		rule3cost = self.getRule3Violations()	
-		print(rule3cost)
+		#print("rule 3 cost", rule3cost)
 		rule4cost = self.getRule4Violations()
-		print(rule4cost)
+		#print("Rule 4 cost:", rule4cost)
+		rule5cost = self.getRule5Violations()
+		#print("Rule 5 cost:", rule5cost)
+		#print("Total cost:", distanceCost+rule3cost+rule4cost+rule4cost+rule5cost)
+		self.myCost = distanceCost+rule3cost+rule4cost+rule4cost+rule5cost
+		return distanceCost+rule3cost+rule4cost+rule4cost+rule5cost
 
 	def getRule3Violations(self):
 		cost = 0
@@ -79,19 +82,39 @@ class Solution:
 	def getRule4Violations(self):
 		violations = 0 
 		lst = self.problem.tournament
-		maxHomeRunAllowed = self.problem.nTeams//2 - self.problem.d1
+		slotsWidth = self.problem.nTeams//2 - self.problem.d1
 		for umpireIdx in range(0,len(self.umpires[0])):				#for each umpire
 			myGames = []
 			for slotIdx, slot in enumerate(self.umpires):				#for each slot	
 				myGames.append(lst[slotIdx][self.umpires[slotIdx][umpireIdx]])
 			myHomeTeams = column(myGames,0)	
-			print(myHomeTeams)
-			for i in range(0, len(self.umpires)-maxHomeRunAllowed):
-				sublist = myHomeTeams[i:i+maxHomeRunAllowed+1]
-				print(sublist)
-				if len(set(sublist)) == 1:
-					violations+=1	
+			#print(myHomeTeams)
+			for i in range(0, len(self.umpires)-slotsWidth+1):
+				sublist = myHomeTeams[i:i+slotsWidth]
+				#print(sublist)
+				#print(i, slotsWidth, i+slotsWidth)
+				violations += len(sublist) - len(set(sublist))
 		return violations * self.problem.constraintPenalty		
+
+	def getRule5Violations(self):
+		violations = 0 
+		lst = self.problem.tournament
+		consecutiveAllowed = self.problem.nTeams//4 - self.problem.d2
+		for umpireIdx in range(0,len(self.umpires[0])):					#for each umpire
+			myGames = []
+			for slotIdx, slot in enumerate(self.umpires):				#for each slot	
+				myGames.append(lst[slotIdx][self.umpires[slotIdx][umpireIdx]])
+			teamsEncountered = []
+			for sublist in myGames:
+				for item in sublist:
+					teamsEncountered.append(item)
+			#print("Allowed",consecutiveAllowed)
+			#self.printGames()
+			for i in range(0, (len(self.umpires)-consecutiveAllowed)*2+1, 2):
+				sublist = teamsEncountered[i:i+(consecutiveAllowed)*2]
+				#print(i, sublist)
+				violations += len(sublist) -  len(set(sublist))
+		return violations * self.problem.constraintPenalty
 
 
 	def getDistanceCost(self):
@@ -119,45 +142,103 @@ class Solution:
 
 	def createUmpires(self):
 		self.umpires = []
-		for i in range(0, 4*(self.problem.nTeams//2)-2):		#for each time slot
+		alloptions = []
+		for i in range(0, 4*(self.problem.nTeams//2)-2):
+			perms = list(itertools.permutations(list(range(0,self.problem.nTeams//2))))
+			perms = list(map(list, perms))
+			#print(perms)
+			random.shuffle(perms)
+			alloptions.append(perms)
+		#print(alloptions)	
+
+		i = 0
+		while i < 4*(self.problem.nTeams//2)-2:				#for each time slot
+
+			#print("LEVEL:", i)
 			if i == 0:											#first slot generate randomly
-				slot = list(range(0,4))
-				random.shuffle(slot)
-				self.umpires.append(slot)
+				self.umpires.append(alloptions[i].pop())
+				i+=1
 			else:												#following games generation:
 				while(True):
-					slot = list(range(0,4))
-					random.shuffle(slot)
+					if len(alloptions[i]) == 0:
+						#print("level",i, "exhausted, backtracking")
+						perms = list(itertools.permutations(list(range(0,self.problem.nTeams//2))))
+						perms = list(map(list, perms))
+						alloptions[i] = perms
+						self.umpires.pop()
+						i-=1	
+						if i<0:
+							exit(1)
+						continue
+					slot = alloptions[i].pop()
+
+					#print(slot)
+					'''for slotIdx, s in enumerate(self.umpires + [slot]):
+						print(slotIdx, s, end="")
+						for _, umpire in enumerate(s):
+							print( "  \t(", self.problem.tournament[slotIdx][umpire], ")", end="")	
+						print("")
+					'''
+
 					if not self.breaksD1Creation(self.umpires + [slot]) and not self.breaksD2Creation(self.umpires + [slot]):
 						self.umpires.append(slot)
+						#print("Appended", i, slot )
+						#print("Total:", self.umpires)
+						#self.printGames()
+						#print("-------")
+						i+=1
 						break
 
-		self.printGames()
+
+		#self.printGames()
+		#exit()
 
 	def breaksD1Creation(self, lst):
+	#	for slotIdx, slot in enumerate(lst):
+		#	print(slotIdx, slot, end="")
+	#		for _, umpire in enumerate(slot):
+	#			print( "  \t(", self.problem.tournament[slotIdx][umpire], ")", end="")	
+	#		print("")	
 		maxHomeRunAllowed = self.problem.nTeams//2 - self.problem.d1
 		for umpireIdx in range(0,len(lst[0])):		#for each umpire
 			myGames = []
 			for slotIdx, slot in enumerate(lst):
 				myGames.append(self.problem.tournament[slotIdx][lst[slotIdx][umpireIdx]])
 			myHomeTeams = column(myGames,0)	
-			longestHomeRun = longest_repetition(myHomeTeams)
-			if longestHomeRun > maxHomeRunAllowed:
-				return True	
+			for i in range(0, (len(lst)-maxHomeRunAllowed)*2+1, 2):
+				sublist = myHomeTeams[i:i+(maxHomeRunAllowed)]
+				#print(maxHomeRunAllowed)
+				#print(umpireIdx,i,"sublists:", sublist)
+				if len(sublist) != len(set(sublist)):
+					#print("D1 broken")
+					return True	
 		return False
 
 	def breaksD2Creation(self, lst):
-		maxSequenceAllowed = (self.problem.nTeams//2) - self.problem.d2
+	#	for slotIdx, slot in enumerate(lst):
+	#		print(slotIdx, slot, end="")
+	#		for _, umpire in enumerate(slot):
+	#			print( "  \t(", self.problem.tournament[slotIdx][umpire], ")", end="")	
+	#		print("")
+		
+
+		#print(lst)
+		maxSequenceAllowed = (self.problem.nTeams//4) - self.problem.d2
 		for umpireIdx in range(0,len(lst[0])):		#for each umpire
 			myGames = []
 			for slotIdx, slot in enumerate(lst):
 				myGames.append(self.problem.tournament[slotIdx][lst[slotIdx][umpireIdx]])
-			myHomeTeams = column(myGames,0)
-			myAwayTeams = column(myGames,1)	
-			longestHomeRun = longest_repetition(myHomeTeams)
-			longestAwayRun = longest_repetition(myAwayTeams)
-			if longestHomeRun > maxSequenceAllowed or longestAwayRun > maxSequenceAllowed:
-				return True	
+			teamsEncountered = []
+			for sublist in myGames:
+				for item in sublist:
+					teamsEncountered.append(item)
+			for i in range(0, (len(lst)-maxSequenceAllowed)*2+1, 2):
+				sublist = teamsEncountered[i:i+(maxSequenceAllowed)*2]
+				#print(umpireIdx,i,"sublists:", sublist)
+				if len(sublist) != len(set(sublist)):
+					#print("----D2 broken")
+					return True	
+
 		return False
 
 	def printGames(self):
@@ -257,12 +338,58 @@ def parseInput(path):
 
 
 def run(nTeams, dists, opponents, args):
+	popSize = 500
+	mutationChance = 5		# int/100
 	problem = Problem(nTeams, dists, opponents, args)
-	solution = Solution(problem)
-	solution.cost()
-	#solution2 = Solution(problem)
+	population = []
+	for i in range(0, popSize):							#500 initial population
+		print("Generating population:", i+1,"of 500\r", end="")
+		population.append(Solution(problem))
+	print("")
+	bestSolution = population[0]
 
+	for epochNum in range(1,1000):
+		print("Epoch:", epochNum, end = '')
+		population.sort(key=Solution.cost)
+		if bestSolution.myCost > population[0].myCost:	#save best solution
+			bestSolution = population[0]
+		costsAverage = statistics.mean([p.myCost for p in population])	
+		unique = []
+		for j in range (0,popSize):
+			unique.append(population[j].umpires)
+		unique = set(str(x) for x in unique) 
+
+		print("\tBest:", bestSolution.myCost, "\tR3 cost:", bestSolution.getRule3Violations(), "\tR4 cost:", 
+		bestSolution.getRule4Violations(), "\tR5 cost:", bestSolution.getRule5Violations(), "\tAverage:", int(costsAverage), "unique:", len(unique))	
+		if epochNum % 100 == 0:
+			print(bestSolution.printGames())
+		parents = population[0: popSize//2]
+		random.shuffle(parents)		
+		children = 250 * [None]
+		for i in range(0, popSize//4):			
+			#print(i)
+			children[i*2] = crossover(parents[i*2], parents[i*2+1])
+			children[i*2+1] = crossover(parents[i*2], parents[i*2+1])
+		population = parents + children			
+		for i in range(0, popSize):
+			rand = random.randint(0,100)
+			if rand < mutationChance:
+				mutate(population[i])
 	return None
+
+def crossover(parent1, parent2):
+	split = random.randint(1, len(parent1.umpires)-1)
+	child = Solution(parent1.problem)
+	umpires = parent1.umpires[0:split] + parent2.umpires[split:]
+	child.umpires = umpires 
+	return child
+
+def mutate(solution):
+	mutatedIndex = random.randint(0, len(solution.umpires)-1)
+	mutatedIndex2 = random.randint(0, len(solution.umpires)-1)
+	tmp = solution.umpires[mutatedIndex]
+	solution.umpires[mutatedIndex] = solution.umpires[mutatedIndex2]
+	solution.umpires[mutatedIndex2] = tmp
 
 
 def main(args=None):
