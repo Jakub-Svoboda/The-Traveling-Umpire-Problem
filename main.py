@@ -16,6 +16,7 @@ import re
 import random
 import itertools
 import statistics
+import numpy as np
 
 class Problem:
 	def __init__(self, nTeams, dists, opponents, args):
@@ -50,9 +51,11 @@ class Problem:
 
 class Solution:
 
-	def __init__(self, problem):
+	def __init__(self, problem, create=True):
 		self.problem = problem
-		self.createUmpires()
+		self.umpires = []
+		if create:
+			self.createUmpires()
 
 	def cost(self):
 		distanceCost = self.getDistanceCost()	
@@ -259,24 +262,6 @@ def checkIfDuplicates(listOfElems):
 def column(matrix, i):
 	return [row[i] for row in matrix]	
 
-def longest_repetition(iterable):
-    """
-    Return the number of longest cansecutive repetitions in `iterable`.
-    If there are multiple such items, return the first one.
-    If `iterable` is empty, return `None`.
-    """
-    longest_element = current_element = None
-    longest_repeats = current_repeats = 0
-    for element in iterable:
-        if current_element == element:
-            current_repeats += 1
-        else:
-            current_element = element
-            current_repeats = 1
-        if current_repeats > longest_repeats:
-            longest_repeats = current_repeats
-            longest_element = current_element
-    return longest_repeats		
 
 #check the validity of arguments
 def checkArgs(args):	
@@ -354,13 +339,13 @@ def run(nTeams, dists, opponents, args):
 		if bestSolution.myCost > population[0].myCost:	#save best solution
 			bestSolution = population[0]
 		costsAverage = statistics.mean([p.myCost for p in population])	
-		unique = []
-		for j in range (0,popSize):
-			unique.append(population[j].umpires)
-		unique = set(str(x) for x in unique) 
+		#unique = []
+		#for j in range (0,popSize):
+		#	unique.append(population[j].umpires)
+		#unique = set(str(x) for x in unique) 
 
 		print("\tBest:", bestSolution.myCost, "\tR3 cost:", bestSolution.getRule3Violations(), "\tR4 cost:", 
-		bestSolution.getRule4Violations(), "\tR5 cost:", bestSolution.getRule5Violations(), "\tAverage:", int(costsAverage), "unique:", len(unique))	
+		bestSolution.getRule4Violations(), "\tR5 cost:", bestSolution.getRule5Violations(), "\tAverage:", int(costsAverage))	
 		if epochNum % 100 == 0:
 			print(bestSolution.printGames())
 		parents = population[0: popSize//2]
@@ -379,10 +364,30 @@ def run(nTeams, dists, opponents, args):
 
 def crossover(parent1, parent2):
 	split = random.randint(1, len(parent1.umpires)-1)
-	child = Solution(parent1.problem)
-	umpires = parent1.umpires[0:split] + parent2.umpires[split:]
-	child.umpires = umpires 
-	return child
+	
+	start = parent1.umpires[0:split] 
+	end = parent2.umpires[split:]
+
+	perms = list(itertools.permutations(list(range(0, parent1.problem.nTeams//2))))
+	perms = list(map(list, perms))
+
+	candidates = []
+
+	for p in perms:
+		npa = np.asarray(end, dtype=np.int32)
+		rearranged = npa[:,p]		
+		candidates.append(rearranged.tolist())
+		
+	pop = []
+	for i in range(0, len(perms)):
+		pop.append(Solution(parent1.problem, create=False))	
+
+	for idx,p in enumerate(pop):
+		pop[idx].umpires = start + candidates[idx]
+	#costs = [c.cost() for c in pop]	
+	pop.sort(key=Solution.cost)
+	pop[0].umpires = start + end
+	return pop[0]
 
 def mutate(solution):
 	mutatedIndex = random.randint(0, len(solution.umpires)-1)
