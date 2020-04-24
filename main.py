@@ -17,6 +17,10 @@ import random
 import itertools
 import statistics
 import numpy as np
+import cProfile
+from multiprocessing import Process
+import copy
+
 
 class Problem:
 	def __init__(self, nTeams, dists, opponents, args):
@@ -29,25 +33,20 @@ class Problem:
 		self.constraintPenalty = 100000
 
 	def createTournament(self):
-		#Create the tournament object with proper size
-		#tmpGame = [None] * (self.nTeams//2)
-		self.tournament = []
+		self.tournament = []								#Create the tournament object with proper size
 		for _ in range(0, 4*(self.nTeams//2)-2):
 			self.tournament.append([])
-		#Fill in the data
-		for slotIdx, _  in enumerate(self.tournament):
+		
+		for slotIdx, _  in enumerate(self.tournament):		#Fill in the data
 			for recordIdx in range(0, self.nTeams):
 				gamePair = [recordIdx+1, self.opponents[slotIdx][recordIdx]]
-				if gamePair[0] > gamePair[1]:						#home team goes first
+				if gamePair[0] > gamePair[1]:				#home team goes first
 					gamePair = [gamePair[1], gamePair[0]]
 				gamePair[0]	= abs(gamePair[0])
 				gamePair[1]	= abs(gamePair[1])
 				
 				if gamePair not in self.tournament[slotIdx] and [gamePair[1], gamePair[0]] not in self.tournament[slotIdx]:
-					#print(gamePair, "not in ", self.tournament)
 					self.tournament[slotIdx].append(gamePair)
-				#self.tournament[slotIdx][recordIdx] = [recordIdx+1, self.opponents[slotIdx][recordIdx]]
-		#print(self.tournament)
 
 class Solution:
 
@@ -57,18 +56,34 @@ class Solution:
 		if create:
 			self.createUmpires()
 
+	def mutate(self):
+		slotIndex = random.randint(0, len(self.umpires)-1)
+		mutatedIndex = random.randint(0, len(self.umpires[0])-1)
+		mutatedIndex2 = random.randint(0, len(self.umpires[0])-1)
+		while mutatedIndex == mutatedIndex2:
+			mutatedIndex2 = random.randint(0, len(self.umpires[0])-1)
+		slot = self.umpires[slotIndex]
+		game1 = slot[mutatedIndex]
+		game2 = slot[mutatedIndex2]
+		slot[mutatedIndex2] = game1
+		slot[mutatedIndex] = game2
+		self.umpires[slotIndex] = slot
+
+	def myMutate(self):
+		mutatedIndex = random.randint(0, len(self.umpires)-1)
+		mutatedIndex2 = random.randint(0, len(self.umpires)-1)
+		tmp = self.umpires[mutatedIndex]
+		self.umpires[mutatedIndex] = self.umpires[mutatedIndex2]
+		self.umpires[mutatedIndex2] = tmp
+		
+
 	def cost(self):
 		distanceCost = self.getDistanceCost()	
-		#print("Distance cost", distanceCost)
 		rule3cost = self.getRule3Violations()	
-		#print("rule 3 cost", rule3cost)
 		rule4cost = self.getRule4Violations()
-		#print("Rule 4 cost:", rule4cost)
 		rule5cost = self.getRule5Violations()
-		#print("Rule 5 cost:", rule5cost)
-		#print("Total cost:", distanceCost+rule3cost+rule4cost+rule4cost+rule5cost)
 		self.myCost = distanceCost+rule3cost+rule4cost+rule4cost+rule5cost
-		return distanceCost+rule3cost+rule4cost+rule4cost+rule5cost
+		return self.myCost
 
 	def getRule3Violations(self):
 		cost = 0
@@ -88,14 +103,11 @@ class Solution:
 		slotsWidth = self.problem.nTeams//2 - self.problem.d1
 		for umpireIdx in range(0,len(self.umpires[0])):				#for each umpire
 			myGames = []
-			for slotIdx, slot in enumerate(self.umpires):				#for each slot	
+			for slotIdx, _ in enumerate(self.umpires):				#for each slot	
 				myGames.append(lst[slotIdx][self.umpires[slotIdx][umpireIdx]])
 			myHomeTeams = column(myGames,0)	
-			#print(myHomeTeams)
 			for i in range(0, len(self.umpires)-slotsWidth+1):
 				sublist = myHomeTeams[i:i+slotsWidth]
-				#print(sublist)
-				#print(i, slotsWidth, i+slotsWidth)
 				violations += len(sublist) - len(set(sublist))
 		return violations * self.problem.constraintPenalty		
 
@@ -105,18 +117,12 @@ class Solution:
 		consecutiveAllowed = self.problem.nTeams//4 - self.problem.d2
 		for umpireIdx in range(0,len(self.umpires[0])):					#for each umpire
 			myGames = []
-			for slotIdx, slot in enumerate(self.umpires):				#for each slot	
+			for slotIdx, _ in enumerate(self.umpires):				#for each slot	
 				myGames.append(lst[slotIdx][self.umpires[slotIdx][umpireIdx]])
-			teamsEncountered = []
-			for sublist in myGames:
-				for item in sublist:
-					teamsEncountered.append(item)
-			#print("Allowed",consecutiveAllowed)
-			#self.printGames()
+			teamsEncountered = list(itertools.chain(*myGames))
 			for i in range(0, (len(self.umpires)-consecutiveAllowed)*2+1, 2):
 				sublist = teamsEncountered[i:i+(consecutiveAllowed)*2]
-				#print(i, sublist)
-				violations += len(sublist) -  len(set(sublist))
+				violations += len(sublist) - len(set(sublist))
 		return violations * self.problem.constraintPenalty
 
 
@@ -127,19 +133,13 @@ class Solution:
 			for slotIdx in range(0,len(self.umpires)):				
 				myGames.append(self.problem.tournament[slotIdx][self.umpires[slotIdx][umpireIdx]])
 			myHomeGames = column(myGames,0)
-
-			#print(myGames)
-			#print(myHomeGames)
-
 			lastVenue = None
 			for venueIdx,venue in enumerate(myHomeGames):
 				if(venueIdx == 0):
 					lastVenue = venue
 					continue
-
-				#print("From:", venue, "to", lastVenue, "it is", self.problem.dists[venue-1][lastVenue-1])
 				distanceCost += self.problem.dists[venue-1][lastVenue-1]
-				lastVenue = venue
+				lastVenue = venue	
 		return distanceCost	
 
 
@@ -149,22 +149,17 @@ class Solution:
 		for i in range(0, 4*(self.problem.nTeams//2)-2):
 			perms = list(itertools.permutations(list(range(0,self.problem.nTeams//2))))
 			perms = list(map(list, perms))
-			#print(perms)
 			random.shuffle(perms)
 			alloptions.append(perms)
-		#print(alloptions)	
 
 		i = 0
 		while i < 4*(self.problem.nTeams//2)-2:				#for each time slot
-
-			#print("LEVEL:", i)
 			if i == 0:											#first slot generate randomly
 				self.umpires.append(alloptions[i].pop())
 				i+=1
 			else:												#following games generation:
 				while(True):
 					if len(alloptions[i]) == 0:
-						#print("level",i, "exhausted, backtracking")
 						perms = list(itertools.permutations(list(range(0,self.problem.nTeams//2))))
 						perms = list(map(list, perms))
 						alloptions[i] = perms
@@ -174,34 +169,13 @@ class Solution:
 							exit(1)
 						continue
 					slot = alloptions[i].pop()
-
-					#print(slot)
-					'''for slotIdx, s in enumerate(self.umpires + [slot]):
-						print(slotIdx, s, end="")
-						for _, umpire in enumerate(s):
-							print( "  \t(", self.problem.tournament[slotIdx][umpire], ")", end="")	
-						print("")
-					'''
-
 					if not self.breaksD1Creation(self.umpires + [slot]) and not self.breaksD2Creation(self.umpires + [slot]):
 						self.umpires.append(slot)
-						#print("Appended", i, slot )
-						#print("Total:", self.umpires)
-						#self.printGames()
-						#print("-------")
 						i+=1
 						break
 
 
-		#self.printGames()
-		#exit()
-
-	def breaksD1Creation(self, lst):
-	#	for slotIdx, slot in enumerate(lst):
-		#	print(slotIdx, slot, end="")
-	#		for _, umpire in enumerate(slot):
-	#			print( "  \t(", self.problem.tournament[slotIdx][umpire], ")", end="")	
-	#		print("")	
+	def breaksD1Creation(self, lst):	
 		maxHomeRunAllowed = self.problem.nTeams//2 - self.problem.d1
 		for umpireIdx in range(0,len(lst[0])):		#for each umpire
 			myGames = []
@@ -210,22 +184,11 @@ class Solution:
 			myHomeTeams = column(myGames,0)	
 			for i in range(0, (len(lst)-maxHomeRunAllowed)*2+1, 2):
 				sublist = myHomeTeams[i:i+(maxHomeRunAllowed)]
-				#print(maxHomeRunAllowed)
-				#print(umpireIdx,i,"sublists:", sublist)
 				if len(sublist) != len(set(sublist)):
-					#print("D1 broken")
 					return True	
 		return False
 
 	def breaksD2Creation(self, lst):
-	#	for slotIdx, slot in enumerate(lst):
-	#		print(slotIdx, slot, end="")
-	#		for _, umpire in enumerate(slot):
-	#			print( "  \t(", self.problem.tournament[slotIdx][umpire], ")", end="")	
-	#		print("")
-		
-
-		#print(lst)
 		maxSequenceAllowed = (self.problem.nTeams//4) - self.problem.d2
 		for umpireIdx in range(0,len(lst[0])):		#for each umpire
 			myGames = []
@@ -237,16 +200,13 @@ class Solution:
 					teamsEncountered.append(item)
 			for i in range(0, (len(lst)-maxSequenceAllowed)*2+1, 2):
 				sublist = teamsEncountered[i:i+(maxSequenceAllowed)*2]
-				#print(umpireIdx,i,"sublists:", sublist)
 				if len(sublist) != len(set(sublist)):
-					#print("----D2 broken")
 					return True	
-
 		return False
 
 	def printGames(self):
 		for slotIdx, slot in enumerate(self.umpires):
-			print(slotIdx, slot, end="")
+			print(slotIdx, end=":")
 			for _, umpire in enumerate(slot):
 				print( "  \t(", self.problem.tournament[slotIdx][umpire], ")", end="")	
 			print("")	
@@ -270,7 +230,7 @@ def checkArgs(args):
 	if args.d2 < 0: 
 		raise ValueError("D2 must be >= 0.")
 	if not os.path.isfile(args.inputPath):				
-		raise ValueError("The file " + args.weights + " does not exist.")
+		raise ValueError("The file " + args.inputPath + " does not exist.")
 	return args	
 
 #sets up an argument parser	
@@ -296,9 +256,7 @@ def parseInput(path):
 	f = open(path,"r")
 	lines = f.readlines() 
 	concatenated = "".join(lines) 	
-	#print(re.search("nTeams=(\d*|\s*)*;", concatenated)[0][7:-1])
 	nTeams = int(re.search("nTeams=(\d*|\s*)*;", concatenated)[0][7:-1])
-	#print(nTeams)
 
 	dists = re.search("dist(\s*)=(.*?|\n*?|\s*)*;", concatenated)
 	dists = dists.group(0)[6:-2]
@@ -307,7 +265,6 @@ def parseInput(path):
 	dists = dists.replace("\n","")
 	dists = list(map(int, dists.split()))
 	dists = list(chunks(dists,nTeams))
-	#print(list(chunks(dists,nTeams)))
 
 	opponents = re.search("opponents(\s*)=(.*?|\n*?|\s*|-*)*;", concatenated)
 	opponents = opponents.group(0)[10:-2]
@@ -316,41 +273,40 @@ def parseInput(path):
 	opponents = opponents.replace("\n","")
 	opponents = list(map(int, opponents.split()))
 	opponents = list(chunks(opponents,nTeams))
-	#print(list(chunks(opponents,nTeams)))
-
 	return nTeams, dists, opponents
-
 
 
 def run(nTeams, dists, opponents, args):
 	popSize = 500
-	mutationChance = 5		# int/100
+	mutationChance = 5									#5% is the textbook mutation chance
 	problem = Problem(nTeams, dists, opponents, args)
 	population = []
 	for i in range(0, popSize):							#500 initial population
 		print("Generating population:", i+1,"of 500\r", end="")
 		population.append(Solution(problem))
 	print("")
-	bestSolution = population[0]
+	bestSolution = copy.deepcopy(population[0])
 
-	for epochNum in range(1,1000):
+	for epochNum in range(1,10000):
 		print("Epoch:", epochNum, end = '')
-		population.sort(key=Solution.cost)
-		if bestSolution.myCost > population[0].myCost:	#save best solution
-			bestSolution = population[0]
-		costsAverage = statistics.mean([p.myCost for p in population])	
+		costs = [p.cost() for p in population]
+		minindex = costs.index(min(costs))
+		if bestSolution.cost() > population[minindex].cost():	#save best solution
+			bestSolution = copy.deepcopy(population[minindex])
+		costsAverage = statistics.mean(costs)	
 		#unique = []
 		#for j in range (0,popSize):
 		#	unique.append(population[j].umpires)
 		#unique = set(str(x) for x in unique) 
 
-		print("\tBest:", bestSolution.myCost, "\tR3 cost:", bestSolution.getRule3Violations(), "\tR4 cost:", 
+		print("\tBest:", bestSolution.cost(), "\tR3 cost:", bestSolution.getRule3Violations(), "\tR4 cost:", 
 		bestSolution.getRule4Violations(), "\tR5 cost:", bestSolution.getRule5Violations(), "\tAverage:", int(costsAverage))	
-		if epochNum % 100 == 0:
-			print(bestSolution.printGames())
+		if epochNum % 10 == 0:
+			print("Best schedule found:  <Umpire1> ... <UmpireN> ")
+			bestSolution.printGames()
 		parents = population[0: popSize//2]
 		random.shuffle(parents)		
-		children = 250 * [None]
+		children = [None for _ in range(popSize//2)]
 		for i in range(0, popSize//4):			
 			#print(i)
 			children[i*2] = crossover(parents[i*2], parents[i*2+1])
@@ -359,12 +315,11 @@ def run(nTeams, dists, opponents, args):
 		for i in range(0, popSize):
 			rand = random.randint(0,100)
 			if rand < mutationChance:
-				mutate(population[i])
+				population[i].mutate()
 	return None
 
 def crossover(parent1, parent2):
-	split = random.randint(1, len(parent1.umpires)-1)
-	
+	split = random.randint(1, len(parent1.umpires)-1)	
 	start = parent1.umpires[0:split] 
 	end = parent2.umpires[split:]
 
@@ -378,23 +333,21 @@ def crossover(parent1, parent2):
 		rearranged = npa[:,p]		
 		candidates.append(rearranged.tolist())
 		
-	pop = []
-	for i in range(0, len(perms)):
-		pop.append(Solution(parent1.problem, create=False))	
+	pop = [Solution(parent1.problem, create=False) for x in list(range(0, len(perms)))]
 
-	for idx,p in enumerate(pop):
+	for idx,_ in enumerate(pop):
 		pop[idx].umpires = start + candidates[idx]
-	#costs = [c.cost() for c in pop]	
-	pop.sort(key=Solution.cost)
-	pop[0].umpires = start + end
-	return pop[0]
 
-def mutate(solution):
-	mutatedIndex = random.randint(0, len(solution.umpires)-1)
-	mutatedIndex2 = random.randint(0, len(solution.umpires)-1)
-	tmp = solution.umpires[mutatedIndex]
-	solution.umpires[mutatedIndex] = solution.umpires[mutatedIndex2]
-	solution.umpires[mutatedIndex2] = tmp
+	costs = [p.cost() for p in pop]
+	minindex = costs.index(min(costs))
+	return pop[minindex]
+
+def myCrossover(parent1, parent2):
+	split = random.randint(1, len(parent1.umpires)-1)
+	child = Solution(parent1.problem, create=False)
+	umpires = parent1.umpires[0:split] + parent2.umpires[split:]
+	child.umpires = umpires 
+	return child
 
 
 def main(args=None):
@@ -407,13 +360,9 @@ def main(args=None):
 	nTeams, dists, opponents = parseInput(args.inputPath)
 
 	start = time.time()
-	bestSolution = run(nTeams, dists, opponents, args)
+	run(nTeams, dists, opponents, args)
 	end = time.time()
 	print("Time:", end-start)
-
-
-
-
 
 if __name__== "__main__":
 	main()
