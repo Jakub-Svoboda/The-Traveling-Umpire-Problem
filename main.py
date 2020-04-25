@@ -325,15 +325,13 @@ def run(nTeams, dists, opponents, args):
 				population[i].mutate()
 	return None
 
-def tmpCrossover(parent1,parent2, eliminate, umpires):
+def crossover(parent1,parent2, eliminate, umpires):
 	perms = list(itertools.permutations(list(range(0, parent1.problem.nTeams//2))))
 	perms = list(map(list, perms))
 	split = random.randint(1, len(parent1.umpires)-1)	
 	start = parent1.umpires[0:split] 
 	end = parent2.umpires[split:]
-
 	candidates = []
-
 	for p in perms:
 		npa = np.asarray(end, dtype=np.int32)
 		rearranged = npa[:,p]		
@@ -345,21 +343,12 @@ def tmpCrossover(parent1,parent2, eliminate, umpires):
 		pop[idx].umpires = start + candidates[idx]
 
 	[p.cost() for p in pop]
-
 	pop.sort(key=lambda x:x.myCost)
 	for p in pop:
 		umpStr = str(p.umpires)
-		
-		#print(umpires)
-		#print(umpStr)
-		#exit()
 		if umpStr in umpires:			#it is an already existing child
-			#print("Nope already exists")
 			continue
 		else:
-			#print("replaced----")
-			#print(eliminate.umpires)
-			#print(p.umpires)
 			return p
 	return eliminate		#if no unique child is found, eliminate survives
 
