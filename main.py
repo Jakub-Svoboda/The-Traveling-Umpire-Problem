@@ -77,8 +77,10 @@ class Solution:
 		self.umpires[mutatedIndex2] = tmp
 		
 
-	def cost(self):
-		distanceCost = self.getDistanceCost()	
+	def cost(self, skipDist=False):
+		distanceCost = 0
+		if not skipDist:
+			distanceCost = self.getDistanceCost()	
 		rule3cost = self.getRule3Violations()	
 		rule4cost = self.getRule4Violations()
 		rule5cost = self.getRule5Violations()
@@ -294,31 +296,74 @@ def run(nTeams, dists, opponents, args):
 		if bestSolution.cost() > population[minindex].cost():	#save best solution
 			bestSolution = copy.deepcopy(population[minindex])
 		costsAverage = statistics.mean(costs)	
-		#unique = []
-		#for j in range (0,popSize):
-		#	unique.append(population[j].umpires)
-		#unique = set(str(x) for x in unique) 
+		umpires = []
+		for j in range (0,popSize):
+			umpires.append(population[j].umpires)
+		umpires = set(str(x) for x in umpires) 
 
 		print("\tBest:", bestSolution.cost(), "\tR3 cost:", bestSolution.getRule3Violations(), "\tR4 cost:", 
-		bestSolution.getRule4Violations(), "\tR5 cost:", bestSolution.getRule5Violations(), "\tAverage:", int(costsAverage))	
+		bestSolution.getRule4Violations(), "\tR5 cost:", bestSolution.getRule5Violations(), "\tAverage:", int(costsAverage), len(umpires))	
 		if epochNum % 10 == 0:
 			print("Best schedule found:  <Umpire1> ... <UmpireN> ")
 			bestSolution.printGames()
+		population.sort(key=lambda x: x.myCost)	
 		parents = population[0: popSize//2]
+		eliminates = population[popSize//2:popSize]
+		random.shuffle(eliminates)
 		random.shuffle(parents)		
-		children = [None for _ in range(popSize//2)]
+		#children = [None for _ in range(popSize//2)]
 		for i in range(0, popSize//4):			
-			#print(i)
-			children[i*2] = crossover(parents[i*2], parents[i*2+1])
-			children[i*2+1] = crossover(parents[i*2], parents[i*2+1])
-		population = parents + children			
+			eliminates[i*2] = crossover(parents[i*2], parents[i*2+1], eliminates[i*2], umpires)
+			eliminates[i*2+1] = crossover(parents[i*2], parents[i*2+1], eliminates[i*2+1], umpires)
+		#population = parents + children			
+		#print(len(parents), len(eliminates))
+		population = parents + eliminates
 		for i in range(0, popSize):
+			#print(i, len(population))
 			rand = random.randint(0,100)
 			if rand < mutationChance:
 				population[i].mutate()
 	return None
 
-def crossover(parent1, parent2):
+def tmpCrossover(parent1,parent2, eliminate, umpires):
+	perms = list(itertools.permutations(list(range(0, parent1.problem.nTeams//2))))
+	perms = list(map(list, perms))
+	split = random.randint(1, len(parent1.umpires)-1)	
+	start = parent1.umpires[0:split] 
+	end = parent2.umpires[split:]
+
+	candidates = []
+
+	for p in perms:
+		npa = np.asarray(end, dtype=np.int32)
+		rearranged = npa[:,p]		
+		candidates.append(rearranged.tolist())
+		
+	pop = [Solution(parent1.problem, create=False) for x in list(range(0, len(perms)))]
+
+	for idx,_ in enumerate(pop):
+		pop[idx].umpires = start + candidates[idx]
+
+	[p.cost() for p in pop]
+
+	pop.sort(key=lambda x:x.myCost)
+	for p in pop:
+		umpStr = str(p.umpires)
+		
+		#print(umpires)
+		#print(umpStr)
+		#exit()
+		if umpStr in umpires:			#it is an already existing child
+			#print("Nope already exists")
+			continue
+		else:
+			#print("replaced----")
+			#print(eliminate.umpires)
+			#print(p.umpires)
+			return p
+	return eliminate		#if no unique child is found, eliminate survives
+
+def crossover_old(parent1, parent2):
 	split = random.randint(1, len(parent1.umpires)-1)	
 	start = parent1.umpires[0:split] 
 	end = parent2.umpires[split:]
@@ -342,7 +387,7 @@ def crossover(parent1, parent2):
 	minindex = costs.index(min(costs))
 	return pop[minindex]
 
-def myCrossover(parent1, parent2):
+def crossover(parent1, parent2):
 	split = random.randint(1, len(parent1.umpires)-1)
 	child = Solution(parent1.problem, create=False)
 	umpires = parent1.umpires[0:split] + parent2.umpires[split:]
