@@ -376,7 +376,7 @@ def crossover_old(parent1, parent2):
 	minindex = costs.index(min(costs))
 	return pop[minindex]
 
-def crossover(parent1, parent2):
+def crossoverExperimental(parent1, parent2):
 	split = random.randint(1, len(parent1.umpires)-1)
 	child = Solution(parent1.problem, create=False)
 	umpires = parent1.umpires[0:split] + parent2.umpires[split:]
