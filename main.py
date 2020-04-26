@@ -306,8 +306,10 @@ def run(nTeams, dists, opponents, args):
 		random.shuffle(eliminates)						#randomly shuffle for random offspring generation
 		random.shuffle(parents)		
 		for i in range(0, popSize//4):					#Crossover
-			eliminates[i*2] = crossoverExperimental(parents[i*2], parents[i*2+1], eliminates[i*2], umpires)
-			eliminates[i*2+1] = crossoverExperimental(parents[i*2], parents[i*2+1], eliminates[i*2+1], umpires)
+			eliminates[i*2] = crossover(parents[i*2], parents[i*2+1], eliminates[i*2], umpires)
+			eliminates[i*2+1] = crossover(parents[i*2], parents[i*2+1], eliminates[i*2+1], umpires)
+			#eliminates[i*2] = crossoverExperimental(parents[i*2], parents[i*2+1], eliminates[i*2], umpires)
+			#eliminates[i*2+1] = crossoverExperimental(parents[i*2], parents[i*2+1], eliminates[i*2+1], umpires)
 		population = parents + eliminates				#<- obsolete? 
 		for i in range(0, popSize):						#Mutations
 			rand = random.randint(0,100)
