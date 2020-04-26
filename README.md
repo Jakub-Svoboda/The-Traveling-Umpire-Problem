@@ -16,11 +16,11 @@ How to use:
 
 Run: 	
 
->	./python3 main.py		
+>	python3 main.py		
 
 
 You can use optional parameters:
->	./python3 main.py -d1 \<NumD1\> -d2 \<NumD2\> --i \<path\>
+>	python3 main.py -d1 \<NumD1\> -d2 \<NumD2\> --i \<path\>
 
 where NumD1 and NumD2 are parameters describing the constraints of the problem (default d1=d2=0) and path is the path to the input txt file (default dataset/umps8.txt).
 
