@@ -68,6 +68,10 @@ class Solution:
 		slot[mutatedIndex] = game2
 		self.umpires[slotIndex] = slot
 
+	def mutateExperimental(self):
+		slotIndex = random.randint(0, len(self.umpires)-1)					#Which slot to mutate
+		random.shuffle(self.umpires[slotIndex])
+
 	def cost(self, skipDist=False):							#Fitness function
 		distanceCost = 0										
 		if not skipDist:
@@ -302,13 +306,14 @@ def run(nTeams, dists, opponents, args):
 		random.shuffle(eliminates)						#randomly shuffle for random offspring generation
 		random.shuffle(parents)		
 		for i in range(0, popSize//4):					#Crossover
-			eliminates[i*2] = crossover(parents[i*2], parents[i*2+1], eliminates[i*2], umpires)
-			eliminates[i*2+1] = crossover(parents[i*2], parents[i*2+1], eliminates[i*2+1], umpires)
+			eliminates[i*2] = crossoverExperimental(parents[i*2], parents[i*2+1], eliminates[i*2], umpires)
+			eliminates[i*2+1] = crossoverExperimental(parents[i*2], parents[i*2+1], eliminates[i*2+1], umpires)
 		population = parents + eliminates				#<- obsolete? 
 		for i in range(0, popSize):						#Mutations
 			rand = random.randint(0,100)
 			if rand < mutationChance:
 				population[i].mutate()
+				#population[i].mutateExperimental()
 	return None
 
 def crossover(parent1,parent2, eliminate, umpires):
@@ -338,14 +343,36 @@ def crossover(parent1,parent2, eliminate, umpires):
 			return p									#If it's an original individual, it replaces the eliminate
 	return eliminate									#if no unique child is found, eliminate survives
 
+def crossoverExperimental(parent1,parent2, eliminate, umpires):
+	perms = list(itertools.permutations(list(range(0, parent1.problem.nTeams//2))))
+	perms = list(map(list, perms))						#Get list of all possible permutations
+	split = random.randint(1, len(parent1.umpires)-1)	#Get a random crossover index
+	start = parent1.umpires[0:split] 					
+	end = parent2.umpires[split:]
+	candidates = []									
+	for p in perms:										#numpy for collumns, because python is dumb with matrices
+		npa = np.asarray(end, dtype=np.int32)
+		rearranged = npa[:,p]		
+		candidates.append(rearranged.tolist())
+														#Create new candidates for children
+	pop = Solution(parent1.problem, create=False)
+	random.shuffle(candidates)
+	pop.umpires = start + candidates[0]						
+	umpStr = str(pop.umpires)
+	if umpStr in umpires:							#it child already exists in population
+		return eliminate									#try the next one
+	else:
+		return pop									#If it's an original individual, it replaces the eliminate
+
+
 def main(args=None):
-	if args is None:									#Parese arguments
+	if args is None:									#Parse arguments
 		args = sys.argv[1:]
 	args = setArguments(args)
 
 	random.seed(42)			
 
-	nTeams, dists, opponents = parseInput(args.inputPath)	#Parese the dataset
+	nTeams, dists, opponents = parseInput(args.inputPath)	#Parse the dataset
 
 	start = time.time()										
 	run(nTeams, dists, opponents, args)					#Start the algorithm
